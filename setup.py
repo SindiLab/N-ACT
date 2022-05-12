@@ -1,0 +1,37 @@
+from setuptools import setup, find_packages
+
+with open("README.md", mode="r", encoding="utf-8") as readme_file:
+    readme = readme_file.read()
+
+
+
+setup(
+      name="NACT",
+      version="0.0.8",
+      author="A. Ali Heydari^1, Oscar Davalos^2",
+      author_email="aliheydari@ucdavis.edu",
+      description="N-ACT: Automatic Cell-Type classification using Neural Attention models",
+      long_description=readme,
+      long_description_content_type="text/markdown",
+      license="MIT",
+      url="https://github.com/SindiLab/N-ACT",
+      download_url="https://github.com/SindiLab/N-ACT",
+      packages=find_packages(),
+      install_requires=[
+                        'tqdm==4.47.0',
+                        'adabelief-pytorch==0.2.0',
+                        # 'torch==1.9.1' -> if you do not have an A100 GPU
+                        ## Skip this to make compatible with A100 GPUs,
+                        'scanpy==1.7.0',
+                        'tensorboardX==2.1',
+                        'prettytable',
+                        ],
+      classifiers=[
+                   "Development Status :: 1 - Beta",
+                   "Intended Audience :: Science/Research",
+                   "License :: OSI Approved :: MIT Software License",
+                   "Programming Language :: Python :: 3.7",
+                   "Topic :: Scientific/Engineering :: Artificial Intelligence :: Bioinformatics :: Deep Learning"
+                   ],
+      keywords="Single Cell RNA-seq, Automatic Classification, Attention-Neural Networks, Deep Learning, Transfer Learning"
+      )
