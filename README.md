@@ -1,4 +1,4 @@
 # N-ACT
 The public repository for N-ACT: An Interpretable Deep Learning Model for Automatic Cell Type and  Salient Gene Identification
 
-Thursday, May 12th: Merging private repo with public fronting repo by 1 pm PST.
+A detailed README with links to tutorials and specific examples will follow as soon as the pre-print is approved by bioRxiv.
