@@ -1,7 +1,7 @@
 # N-ACT
 The public repository for [N-ACT: An Interpretable Deep Learning Model for Automatic Cell Type and Salient Gene Identification](https://doi.org/10.1101/2022.05.12.491682)
 
-![N-ACT_Diagram](https://user-images.githubusercontent.com/44180633/180373743-2c6f43d4-0ae3-4ea3-bcb8-c0fc8fd76ae4.png)
+![N-ACT_Diagram](N-ACT_Diagram.png)
 
 
 ## Tutorials
