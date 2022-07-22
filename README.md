@@ -9,23 +9,22 @@ TODO
 
 
 ## Installation:
-TODO
 
-#### Step 1: Install Requirements Explicitly
+#### Install Package Locally
+Make sure to be in the same directory as `setup.py`. Then, using `pip`, run:
 
-Ensure that you are in the same directory as `requirements.txt`. Then using `pip`, we can install the requirements with:
+````bash
+pip install -e .
+````
+
+In the case that you want to install the requirements explicitly, you can do so by:
 
 ````bash
 pip install -r requirements.txt
 ````
 Although the core requirements are listed directly in `setup.py`, it is good to run this beforehand in case of any dependecy on packages from GitHub. 
 
-#### Step 2: Install Package Locally
-Make sure to be in the same directory as `setup.py`. Then, using `pip`, run:
 
-````bash
-pip install -e .
-````
 
 
 ## Citation
@@ -38,9 +37,8 @@ Please cite our repository if it was useful for your research:
 	elocation-id = {2022.05.12.491682},
 	year = {2022},
 	doi = {10.1101/2022.05.12.491682},
-	publisher = {Cold Spring Harbor Laboratory},
+	journal = {The 2022 International Conference on Machine Learning (ICML) Workshop on Computational Biology Proceedings.},
 	URL = {https://www.biorxiv.org/content/early/2022/05/13/2022.05.12.491682},
 	eprint = {https://www.biorxiv.org/content/early/2022/05/13/2022.05.12.491682.full.pdf},
-	journal = {bioRxiv}
 }
 ````
