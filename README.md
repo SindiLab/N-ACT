@@ -24,9 +24,7 @@ In the case that you want to install the requirements explicitly, you can do so 
 ````bash
 pip install -r requirements.txt
 ````
-Although the core requirements are listed directly in `setup.py`, it is good to run this beforehand in case of any dependecy on packages from GitHub. 
-
-
+Although the core requirements are listed directly in `setup.py`. Nonetheless, it is good to run this beforehand in case of any dependecies conflicts.
 
 
 ## Citation
