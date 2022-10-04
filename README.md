@@ -1,5 +1,5 @@
 # N-ACT
-The public repository [N-ACT: An Interpretable Deep Learning Model for Automatic Cell Type and Salient Gene Identification](https://icml-compbio.github.io/2022/papers/WCBICML2022_paper_18.pdf) (Accepted WCB@ICML2022 paper)
+The public repository [N-ACT: An Interpretable Deep Learning Model for Automatic Cell Type and Salient Gene Identification](https://icml-compbio.github.io/2022/papers/WCBICML2022_paper_18.pdf) (WCB @ ICML2022 paper)
 
 [![arXiv:10.48550/arXiv.2206.04047](http://img.shields.io/badge/arXiv-110.48550/arXiv.2206.04047-A42C25.svg)](https://doi.org/10.48550/arXiv.2206.04047)
 
