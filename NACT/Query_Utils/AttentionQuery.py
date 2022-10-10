@@ -115,7 +115,10 @@ class AttentionQuery():
             test_data.obsm['attention'] = score #attentive_genes
             predicted_str = [f'{i}' for i in predicted]
             test_data.obs['prediction'] = predicted_str
-            test_data.obs['prediction'] = test_data.obs['prediction'].astype('category')
+            test_data.obs['prediction'] = test_data.obs['prediction'].astype('str') # changed to str from category since it was causing issues
+            # adding a check for the correct data type in the cluster column
+            if test_data.obs['cluster'].dtype not 'str':
+                test_data.obs['cluster'] = test_data.obs['cluster'].astype('str')
             
         if correct_preditions_only:
             print("    -> **Returning only the correct predictions**")
