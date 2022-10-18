@@ -117,7 +117,7 @@ class AttentionQuery():
             test_data.obs['prediction'] = predicted_str
             test_data.obs['prediction'] = test_data.obs['prediction'].astype('str') # changed to str from category since it was causing issues
             # adding a check for the correct data type in the cluster column
-            if test_data.obs['cluster'].dtype not 'str':
+            if not test_data.obs['cluster'].dtype == str:
                 test_data.obs['cluster'] = test_data.obs['cluster'].astype('str')
             
         if correct_preditions_only:
