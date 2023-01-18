@@ -1,9 +1,9 @@
 """Utility function for evaluating classification performance."""
 import numpy as np
 import scanpy
-from scipy import sparse
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.metrics import classification_report as class_rep
+from .sparsity_handling import sparse_to_dense
 import torch
 
 
@@ -95,14 +95,8 @@ def transfer_cell_types(scanpy_data: scanpy.AnnData,
         device = "cpu"
 
     classification_model = classification_model.to(device)
-
-    if sparse.issparse(scanpy_data.X):
-        np_data = np.asarray(scanpy_data.X.todense())
-    else:
-        np_data = np.asarray(scanpy_data.X)
-
+    np_data = sparse_to_dense(scanpy_data)
     print("==> Making predictions:")
-
     with torch.no_grad():
         features = torch.from_numpy(np_data)
         outputs, _, _ = classification_model(features.float().to(device),

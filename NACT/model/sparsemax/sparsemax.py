@@ -12,7 +12,7 @@ import torch.nn as nn
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class Sparsemax(nn.Module):
+class SparseMax(nn.Module):
     """Sparsemax function."""
 
     def __init__(self, dim=None):
