@@ -1,5 +1,7 @@
 # if you are NOT using A100 GPUs
-torch==1.9.1
+torch>=1.13
+
+# TODO: Remove the comment below at a later date.
 # if you ARE using A100 GPUs, comment out the above requirement and run this separately
 # pip install torch==1.9.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
 
