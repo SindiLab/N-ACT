@@ -21,7 +21,7 @@ setup(
     install_requires=[
         "tqdm>=4.47.0",
         "adabelief-pytorch>=0.2.0",
-        "torch=1.13.1",
+        "torch>=1.13",
         "scanpy==1.7.0",
         "tensorboardX>=2.1",
         "prettytable",
