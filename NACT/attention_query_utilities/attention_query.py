@@ -521,7 +521,7 @@ class AttentionQuery():
 
         # Dictionary for storing each cluster tf-idf normalized values
         tfidf_norm = {}
-        iter_list = list(at_norm.columns)
+        iter_list = list(attentive_tfidf_normalized.columns)
 
         # Loop through the clusters and pull genes and values
         for i in iter_list:
