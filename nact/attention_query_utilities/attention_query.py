@@ -1,8 +1,9 @@
 """Class and function implementation regarding extracting attention values."""
 
 from anndata import AnnData
-import collections
+from collections import Counter
 from itertools import chain
+from ..model import NACTProjectionAttention, NACTAdditiveModel
 import numpy as np
 import pandas as pd
 import torch
@@ -30,14 +31,17 @@ class AttentionQuery():
 
     def __init__(self,
                  scanpy_object: AnnData,
+                 model: NACTProjectionAttention | NACTAdditiveModel = None,
                  split_test: bool = False,
                  which_split: str = "test"):
-        """Initializer of the AttentionQuery class.
+        """ Initializer of the AttentionQuery class.
 
         Args:
 
             scanpy_object: The scanpy object that contains the attention weights
               and predicted cells.
+            model: The model we want to use to make predictions and extract
+              attention weights from.
             split_test: A boolean indicating whether the user wants to get
               attention weights for the entire data (when "False"), or just a
               split (when set to "True").
@@ -53,16 +57,93 @@ class AttentionQuery():
 
         self.split = split_test
         self._correct_predictions_only_flag = False
+        self.model = model
+
+    def get_gene_query(self,
+                       model: NACTProjectionAttention |
+                       NACTAdditiveModel = None,
+                       number_of_query_genes: int = 100,
+                       local_scanpy_obj: AnnData = None,
+                       attention_type: str = "additive",
+                       inplace: bool = False,
+                       mode: str = "tfidf",
+                       correct_predictions_only: bool = True,
+                       use_raw_x: bool = True,
+                       verbose: bool = True):
+        """ Class method with automated worflow of getting query genes.
+
+        Args:
+            model: The model we want to use to make predictions and extract
+              attention weights from.
+            number_of_query_genes = An integer indicating the number of top
+              genes desired
+            local_scanpy_obj: An AnnData object that would locally replace the
+              scanpy object that was set in the constructor for the object.
+            attention_type: The type of attention the inputted model was
+              trained with. This will be 'additive' in most cases (even when
+              NACT included projection blocks).
+            inplace: Wheather we want changes to be inplace, or on a copy (in
+              which case it will be returned.
+            correct_predictions_only: Whether to extract attention only from the
+              correct predictions or not.
+            use_raw_x: To use the "adata.raw.X" or just adata.X (depending on
+              preprocessing pipeline).
+            verbose: Whether the methods should print out their process or not.
+
+        Returns:
+            Based on the ranking method (i.e. TFIDF or averages), the method
+            will return:
+
+            (1) A dataframe with ranked gene names for each cluster
+            (2) A dictionary mapping cluster names to the attention dataframe
+                (the matrix of attention values for cells x genes)
+            (3) A dictionary mapping each cluster to a series containing a gene
+                list as index, mapped to the normalized attention values.
+
+        Raises:
+            None.
+        """
+        # As the first step, we want to extract attention values for each gene.
+        _, _ = self.assign_attention(
+            model=model,
+            inplace=inplace,
+            local_scanpy_obj=local_scanpy_obj,
+            correct_predictions_only=correct_predictions_only,
+            attention_type=attention_type,
+            verbose=verbose,
+            use_raw_x=use_raw_x)
+
+        # Next, we calculate the top attentive genes in each cluster
+        (clust_to_att_dict, top_genes_to_df_dict,
+         top_n_names) = self.get_top_n_per_cluster(n=number_of_query_genes,
+                                                   model=model,
+                                                   mode=mode,
+                                                   verbose=verbose)
+
+        # Lastly, depending on the normalization method (e.g. TFIDF), we
+        # normalize the attention values and return the top attentive genes for
+        # querying.
+        if mode.lower() == "tfidf" or mode.lower() == "tf-idf":
+            tf_idf_df = self.calculate_tfidf(
+                pd.DataFrame.from_dict(top_n_names),
+                top_genes_to_df_dict,
+                n_genes=number_of_query_genes)
+
+            return tf_idf_df, clust_to_att_dict, top_genes_to_df_dict
+        else:
+            return (pd.DataFrame.from_dict(top_n_names), clust_to_att_dict,
+                    top_genes_to_df_dict)
 
     def assign_attention(self,
-                         model=None,
+                         model: NACTProjectionAttention |
+                         NACTAdditiveModel = None,
                          local_scanpy_obj: AnnData = None,
                          attention_type: str = "additive",
                          inplace: bool = False,
-                         correct_predictions_only=True,
-                         use_raw_x=True,
-                         verbose=True):
-        """The method to assign attention score to a scanpy object.
+                         correct_predictions_only: bool = True,
+                         use_raw_x: bool = True,
+                         verbose: bool = True):
+        """ The method to assign attention score to a scanpy object.
 
         Args:
             model: The model we want to use to make predictions and extract
@@ -74,6 +155,11 @@ class AttentionQuery():
               NACT included projection blocks).
             inplace: Wheather we want changes to be inplace, or on a copy (in
               which case it will be returned.
+            correct_predictions_only: Whether to extract attention only from the
+              correct predictions or not.
+            use_raw_x: To use the "adata.raw.X" or just adata.X (depending on
+              preprocessing pipeline).
+            verbose: Whether the methods should print out their process or not.
 
         Returns:
             The method will return:
@@ -88,9 +174,12 @@ class AttentionQuery():
             ValueError: An error occured during reading the trained model.
 
         """
-        if model is None:
+        if model is None and self.model is None:
             raise ValueError("Please provide a model for making predictions and"
                              " extracting attention weights.")
+        else:
+            model = self.model
+
         # set the flag
         self.attention_weights = True
 
@@ -143,7 +232,7 @@ class AttentionQuery():
                 "str"
             )  # changed to str from category since it was causing issues
             # adding a check for the correct data type in the cluster column
-            if not test_data.obs["cluster"].dtype == str:
+            if test_data.obs["cluster"].dtype != str:
                 test_data.obs["cluster"] = test_data.obs["cluster"].astype(
                     "str")
 
@@ -163,10 +252,7 @@ class AttentionQuery():
             att_df = pd.DataFrame(test_data.obsm["attention"].values,
                                   index=test_data.obs.index,
                                   columns=test_data.var.gene_ids.index)
-        except Exception as _:
-            print(
-                "    -> Could not locate obs['gene_ids'] attribute. Defaulting"
-                " to .var instead")
+        except AttributeError as _:
             att_df = pd.DataFrame(test_data.obsm["attention"],
                                   index=test_data.obs.index,
                                   columns=test_data.var.index)
@@ -188,11 +274,11 @@ class AttentionQuery():
             return test_data, att_df
 
     def get_top_n(self,
-                  n: int = 10,
+                  n: int = 100,
                   dataframe: pd.DataFrame = None,
                   rank_mode: str = None,
                   verbose: bool = True):
-        """Class method for getting the top n genes for the entire dataset.
+        """ Class method for getting the top n genes for the entire dataset.
 
         Args:
             n: An integer indicating the number of top genes desired.
@@ -242,9 +328,9 @@ class AttentionQuery():
 
             else:
                 raise NotImplementedError(f"Your provided mode={rank_mode} has"
-                                        "not been implemented yet. Please"
-                                        " choose between 'mean' or 'None' for"
-                                        "now.")
+                                          "not been implemented yet. Please"
+                                          " choose between 'mean' or 'None' for"
+                                          "now.")
 
         else:
             top_genes_transpose = att_df_trans.nlargest(
@@ -261,9 +347,10 @@ class AttentionQuery():
     def get_top_n_per_cluster(self,
                               n: int = 25,
                               model=None,
-                              mode: str = "TFIDF",
-                              top_n_rank_method: str = "mean"):
-        """Get the top n genes for each indivual cluster.
+                              mode: str = "tfidf",
+                              top_n_rank_method: str = "mean",
+                              verbose: bool = False):
+        """ Get the top n genes for each indivual cluster.
 
         Args:
             n: An integer indicating the number of top genes to keep.
@@ -291,7 +378,7 @@ class AttentionQuery():
             ValueError: An error occured during reading the trained model.
 
         """
-        if model is None:
+        if model is None and self.model is None:
             raise ValueError("Please provide a model for making predictions and"
                              " extracting attention weights.")
 
@@ -320,10 +407,12 @@ class AttentionQuery():
         iter_list.sort()
 
         for i in iter_list:
-            print(f"    -> Cluster {i}:")
+            if verbose:
+                print(f"    -> Cluster {i}:")
             # get data for the current cluster
             curr_clust = data_to_use[data_to_use.obs.cluster == i]
-            print(f"    -> Cells in current cluster: {curr_clust.shape[0]}")
+            if verbose:
+                print(f"    -> Cells in current cluster: {curr_clust.shape[0]}")
 
             # Getting the cell x attention per gene df for the current cluster.
             curr_att_df = self.att_df.loc[curr_clust.obs.index]
@@ -343,9 +432,10 @@ class AttentionQuery():
             # expression to lowest).
             self.top_n_names_dict[f"Cluster_{i}"] = curr_att_df.T.sum(
                 axis=1).nlargest(n).index
-
-            print(f"    >-< Done with Cluster {i}:")
-            print()
+            if verbose:
+                print(f"    >-< Done with Cluster {i}")
+                print()
+        print(">-< Done with all clusters")
 
         if mode.lower() == "tfidf":
             return (self.clust_to_att_dict, self.clust_sums_dict,
@@ -358,7 +448,8 @@ class AttentionQuery():
 
     def make_values_unique(self,
                            top_n_dictionary: dict = None,
-                           threshold: int = None):
+                           threshold: int = None,
+                           verbose: bool = False):
         """ Class method to make all the values in a dictionary unique.
 
         Args:
@@ -387,12 +478,13 @@ class AttentionQuery():
 
         if threshold is None:
             # do not threshold the allowed overlaps
-            print("    -> No thresholding... setting overlap bound to inf")
+            if verbose:
+                print("    -> No thresholding... setting overlap bound to inf")
             threshold = np.inf
 
         # find duplicates that appear as many times as the threshold
         duplicate_list = [
-            item for item, count in collections.Counter(all_genes).items()
+            item for item, count in Counter(all_genes).items()
             if count > threshold
         ]
         print(f"==> Found {len(duplicate_list)} many duplicates that appear in"
@@ -408,8 +500,101 @@ class AttentionQuery():
 
         return att_dict
 
-# Getter and setter methods for the class.
+    def calculate_tfidf(self,
+                        top_n_names: dict,
+                        top_n_df_dict: dict,
+                        n_genes: int = 100,
+                        verbose: bool = False):
+        """ Implementation of term frequency–inverse document frequency.
 
+        This function aims to provide a list of top genes that have been
+        normalized by term-frequency (TF) - inverse document frequency (IDF).
+        We define the corpus-wide tf-idf score for each gene as
+                            (1 - Sum(tf-idf)/log(N)),
+        where N is the total number of pseudo documents (list of top genes for
+        each cluster). The returned list of top genes are then sorted in
+        descending order according to the tf-idf scores and subsequently
+        returned.
+
+        Args:
+            top_n_names: A dictionary mapping containing the name of top n genes
+              for each cluster.
+            top_n_df_dict: A dictionary containing the sum of gene attention
+              scores for each cluster.
+            n_genes: A number indicating the length for return values.
+
+        Returns:
+            A pandas dataframe with the Corpus-Wide tf-idf scores for each gene,
+            indexed by the genes, sorted in descending order by the tf-idf
+            scores.
+
+        Raises:
+            None.
+        """
+
+        # Here we convert the intial inputs to dataframes.
+        # Below is the dataframe containing the top n genes for each cluster.
+        top_genes_df = pd.DataFrame.from_dict(top_n_names)
+        # Below is the dataframe containing the sum of gene attention scores
+        # for each cluster
+        attention_sums = pd.DataFrame.from_dict(top_n_df_dict)
+        series = pd.Series(top_genes_df.values.tolist())
+        number_documents = series.shape[0]
+        gene_counts = series.apply(lambda x: Counter(x))
+
+        # Creating a new series to store the tf values.
+        term_freq = gene_counts.apply(
+            lambda x:
+            {gene: count / sum(x.values()) for gene, count in x.items()})
+        # Create a new series to store the idf values.
+        idf = series.apply(
+            lambda x: {
+                gene: np.log(number_documents / len(
+                    [i for i in series if gene in i])) for gene in set(x)
+            })
+        # Create a new series to store the tf-idf values
+        tf_idf = term_freq.apply(
+            lambda x: {
+                gene: count * idf[term_freq[term_freq == x].index[0]][gene]
+                for gene, count in x.items()
+            })
+
+        # Create a dataframe containing the tf-idf values.
+        tfidf_normalized_series = 1 - pd.DataFrame(
+            tf_idf.tolist()).sum() / np.log(number_documents)
+
+        # Get tf-idf genes to index the attention sum dataframe
+        tfidf_genes = tfidf_normalized_series.index.tolist()
+
+        # Subset the dataframe to only contain the top genes
+        most_attentive_subset = attention_sums.loc[tfidf_genes, :]
+
+        # Perform element-wise muliplication
+        attentive_tfidf_normalized = most_attentive_subset.mul(
+            tfidf_normalized_series, axis=0)
+
+        # Dictionary for storing each cluster tf-idf normalized values
+        tfidf_norm = {}
+        iter_list = list(attentive_tfidf_normalized.columns)
+
+        # Loop through the clusters and pull genes and values
+        for i in iter_list:
+            if verbose:
+                print(f"    -> {i}:")
+            # get data for the current cluster
+            cluster_df = attention_sums.loc[:, i]
+
+            # get the top n gene names in ranked order (highest to lowest)
+            tfidf_norm[f"{i}_genes"] = cluster_df.nlargest(n_genes).index
+            tfidf_norm[f"{i}_tfidf_values"] = cluster_df.nlargest(
+                n_genes).values
+
+        # Create a dataframe from the dictionary
+        tfidf_out = pd.DataFrame.from_dict(tfidf_norm)
+
+        return tfidf_out
+
+    # Getter and setter methods for the class.
     def get_scanpy_object(self):
         """Getter method for returning Scanpy object at any given time.
 
@@ -439,87 +624,3 @@ class AttentionQuery():
 
         """
         self.data = new_data
-
-
-# TODO: @Oscar: could you please take care of the clean up and docstrin of this
-# method please?
-
-    def gene_tfidf(self, top_n_genestrings_dict: dict = None):
-        """Calculate TF-IDF values for all genes in a top-n ranked dictionary.
-
-        ***
-        @Oscar: This needs to be cleaned up a bit :)
-        ***
-
-        """
-
-        if top_n_genestrings_dict is None:
-            try:
-                att_dict = self.top_n_genestrings_dict.copy()
-                print("==> Since no dictionary was provided, we will use gene"
-                      " names dictionary as default")
-            except Exception as _:
-                print("==> Please either provide a top n gene name list, or set"
-                      "the attribute 'self.top_n_genestrings_dict'")
-        else:
-            att_dict = top_n_genestrings_dict
-
-        top_n_genes = pd.DataFrame.from_dict(att_dict)
-
-        def tf(genes):
-            """Calculate the gene frequency of a list of genes
-            ***
-            @Oscar: This needs to be cleaned up a bit and maybe moved to a
-            different scope : )
-            ***
-            """
-            freq = {}
-            total = len(genes)
-
-            # count occurrences
-            for gene in genes:
-                if gene in freq:
-                    freq[gene] += 1
-                else:
-                    freq[gene] = 1
-
-            # generate frequencies
-            for gene in freq:
-                freq[gene] = freq[gene] / total
-            return freq
-
-        def idf(dictionaries):
-            """Calculate the inverse document frequency of genes in a list of
-               dictionaries.
-
-            ***
-            @Oscar: This needs to be cleaned up a bit and maybe moved to a
-            different scope : )
-            ***
-            """
-            freq = {}
-            for document in dictionaries:
-                for gene in document:
-                    if gene in freq:
-                        freq[gene] += 1
-                    else:
-                        freq[gene] = 1
-            for gene in freq:
-                freq[gene] = np.log(len(dictionaries) / freq[gene])
-            return freq
-
-        tf_idf = {}
-        # calculate gene frequencies
-        print("==> Calculating gene frequencies")
-        tf_vals = top_n_genes.apply(tf, axis=1)
-
-        # calculate inverse document frequencies
-        print("==> Calculating inverse document frequencies")
-        idf_vals = idf(tf_vals)
-
-        # calculate tf-idf values for all genes in ranked_topN_strdf
-        print("==> Calculating tf-idf values for all ranked genes")
-        for document in range(len(tf_vals)):
-            for gene in tf_vals[document]:
-                tf_idf[gene] = tf_vals[document][gene] * idf_vals[gene]
-        return tf_idf

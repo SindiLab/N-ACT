@@ -23,7 +23,7 @@ class NACTBaseProjectionModel(NACTBaseModel):
             input_dimension: An integer determining the input dimension of the
               pointwise feedforward neural network (PWFF).
             hidden_dimensions: The list of hidden dimensions of the PWFF.
-            use_1x1Cond: A boolean to determine whether we should use 1x1
+            use_1x1_conv: A boolean to determine whether we should use 1x1
               convolutions instead of feedforward layers. This is only for
               computational considerations and both methods should yeild the
               same results.
