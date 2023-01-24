@@ -8,5 +8,5 @@ try:
 except ModuleNotFoundError:
     import importlib_metadata
 
-package_name = "NACT"
+package_name = "nact"
 __version__ = importlib_metadata.version(package_name)

@@ -6,7 +6,7 @@ with open("README.md", mode="r", encoding="utf-8") as readme_file:
     readme = readme_file.read()
 
 setup(
-    name="NACT",
+    name="nact",
     version="0.1.0",
     author="A. Ali Heydari, Oscar Davalos",
     author_email="aliheydari@ucdavis.edu",
