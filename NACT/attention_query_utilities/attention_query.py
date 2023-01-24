@@ -441,77 +441,87 @@ class AttentionQuery():
         self.data = new_data
 
 
-# TODO: @Ali: could you take a look at this and see if there are any changes needed. 
+# TODO: @Ali: could you take a look at this and see if there are any changes needed.
 
-    def calculate_tfidf(top_n_names, top_n_df_dict, n_genes=25):
+    def calculate_tfidf(self, 
+                        top_n_names: dict = [str, str], 
+                        top_n_df_dict: dict = [str, int], 
+                        n_genes: int=25):
         """
-        This function receives a pandas series that contains a list of genes in each row, and returns a pandas series with the Corpus-Wide tf-idf scores for each gene.
-        Where the Corpus-Wide tf-idf score for each gene is defined as (1 - Sum(tf-idf)/log(N)), where N is the total number of pseudo documents.
-        The returned series is indexed by the genes and sorted in descending order by the tf-idf scores.
+        This function receives a pandas series that contains a list of genes
+        in each row, and returns a pandas series with the Corpus-Wide tf-idf
+        scores for each gene. Where the Corpus-Wide tf-idf score for each gene
+        is defined as (1 - Sum(tf-idf)/log(N)), where N is the total number of
+        pseudo documents. The returned series is indexed by the genes and sorted
+        in descending order by the tf-idf scores.
 
-        
+
         Args:
-            top_n_names: A dictionary mapping containing the name of top n genes for each
+            top_n_names:
+                A dictionary mapping containing the name of top n genes for each.
             cluster.
-            top_n_df_dict: A dictionary containing the sum of gene attention scores for each
+            top_n_df_dict:
+                A dictionary containing the sum of gene attention scores for each.
             cluster.
-            n_genes: A number indicating the length for return values.
+            n_genes:
+                A number indicating the length for return values.
 
         Returns:
-            dataframe: A pandas dataframe with the Corpus-Wide tf-idf scores for each gene, indexed by the genes, sorted in descending order by the tf-idf scores.
+            dataframe: A pandas dataframe with the Corpus-Wide tf-idf scores for each gene,
+                indexed by the genes, sorted in descending order by the tf-idf scores.
 
         Raises:
         None
         """
 
 
-        # Convert the intial inputs to dataframes 
-        topgenes_df = pd.DataFrame.from_dict(top_n_names) # dataframe containing gene names sorted by attention sums
-        attention_sums = pd.DataFrame.from_dict(top_n_df_dict) # dataframe containing attention sums
+        # Convert the intial inputs to dataframes
+        # Dataframe containing the top n genes for each cluster
+        top_genes_df = pd.DataFrame.from_dict(top_n_names)
+        # Dataframe containing the sum of gene attention scores for each cluster
+        attention_sums = pd.DataFrame.from_dict(top_n_df_dict)
 
 
         # Check if initial input is a dataframe
-        if isinstance(topgenes_df, pd.DataFrame):
+        if isinstance(top_genes_df, pd.DataFrame):
             # Convert input dataframe into a series containing the pseudo documents
-            series = pd.Series(topgenes_df.values.tolist())
+            series = pd.Series(top_genes_df.values.tolist())
 
 
         # Get the total number of pseudo documents
-        N = series.shape[0]
+        number_documents = series.shape[0]
 
-        #### Calculating the tf-idf values ####
-        # Create a new column to store the gene counts
-        gene_counts = series.apply(lambda x: Counter(x))
-        # Create a new column to store the tf values
-        tf = gene_counts.apply(lambda x: {gene: count/sum(x.values()) for gene, count in x.items()})
-        # Create a new column to store the idf values
-        idf = series.apply(lambda x: {gene:np.log(N/len([i for i in series if gene in i])) for gene in set(x)})
-        # Create a new column to store the tf-idf values
-        tf_idf = tf.apply(lambda x: {gene: count*idf[tf[tf==x].index[0]][gene] for gene, count in x.items()})
+        # Create a new series to store the gene counts
+        gene_counts = series.apply(lambda x: collections.Counter(x))
+        # Create a new series to store the tf values
+        term_freq = gene_counts.apply(lambda x: 
+                                    {gene: 
+                                    count/sum(x.values()) for gene, count in x.items()})
+        # Create a new series to store the idf values
+        idf = series.apply(
+            lambda x: {gene: np.log(
+                number_documents/len([i for i in series if gene in i])) for gene in set(x)})
+        # Create a new series to store the tf-idf values
+        tf_idf = tf.apply(
+            lambda x: {gene: 
+            count*idf[term_freq[term_freq==x].index[0]][gene] for gene, count in x.items()})
 
         # Create a dataframe of the tf-idf values
-        df_tfidf = pd.DataFrame(tf_idf.tolist())
-        # Group the dataframe by gene and calculate the sum of the tf-idf scores
-        df_tfidf = df_tfidf.sum()
+        tfidf_normalized_series = 1 -  pd.DataFrame(tf_idf.tolist()).sum()/np.log(number_documents)
 
-        # Normalizing the values to make sure that common genes are closer to 0
-        df_tfidf = (1 - df_tfidf/np.log(N))
-
-
-        #### tf-idf normalization of attention sums ####
         # Get tf-idf genes to index the attention sum dataframe
-        tfidf_genes = df_tfidf.index.tolist()
+        tfidf_genes = tfidf_normalized_series.index.tolist()
 
         # Subset the dataframe to only contain the top genes
-        at_sub = attention_sums.loc[tfidf_genes, :]
+        most_attentive_subset = attention_sums.loc[tfidf_genes, :]
 
         # Perform element-wise muliplication
-        at_norm = attention_sums.mul(df_tfidf, axis = 0) # element wise multiplication
+        attentive_tfidf_normalized = most_attentive_subset.mul(tfidf_normalized_series,
+                                                                axis = 0)
 
         # Dictionary for storing each cluster tf-idf normalized values
         tfidf_norm = {}
         iter_list = list(at_norm.columns)
-        # iter_list.sort()
 
         # Loop through the clusters and pull genes and values
         for i in iter_list:
@@ -520,10 +530,11 @@ class AttentionQuery():
             cluster_df = attention_sums.loc[:,i]
 
             # get the top n gene names in ranked order (highest expression to lowest)
-            tfidf_norm[f'Cluster_{i}_genes'] = cluster_df.nlargest(n_genes).index
-            tfidf_norm[f'Cluster_{i}_tfidfnorm'] = cluster_df.nlargest(n_genes).values
+            tfidf_norm[f"Cluster_{i}_genes"] = cluster_df.nlargest(n_genes).index
+            tfidf_norm[f"Cluster_{i}_tfidf_values"] = cluster_df.nlargest(n_genes).values
 
         # Create a dataframe from the dictionary
         tfidf_out = pd.DataFrame.from_dict(tfidf_norm)
 
         return tfidf_out
+
