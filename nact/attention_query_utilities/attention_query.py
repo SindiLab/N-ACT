@@ -346,7 +346,16 @@ class AttentionQuery():
             verbose: Whether the methods should print out their process or not.
 
         Returns:
+            Based on the data splitting ("data_split" arg set to true or false),
+            the method will return two different set of outputs:
 
+            (1) If "data_split" is True, then the method will output six
+                analysis outputs based on the most important genes identified.
+                These outputs consist of values, labels and cell type names for
+                train and test split (equalling to six).
+            (2) If "data_split" is True then the returned outputs are the
+                values, labels and cell type names for all cells (thus three
+                outputs).
 
         Raises:
             None.
