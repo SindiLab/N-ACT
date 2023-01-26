@@ -79,7 +79,7 @@ class AttentionQuery():
         Args:
             model: The model we want to use to make predictions and extract
               attention weights from.
-            number_of_query_genes = An integer indicating the number of top
+            number_of_query_genes: An integer indicating the number of top
               genes desired
             local_scanpy_obj: An AnnData object that would locally replace the
               scanpy object that was set in the constructor for the object.
@@ -311,6 +311,91 @@ class AttentionQuery():
                     verbose=verbose)
             print(">-< Done.")
 
+    def get_important_global_genes(self,
+                                   model: NACTProjectionAttention |
+                                   NACTAdditiveModel = None,
+                                   how_many_global_genes: int = 50,
+                                   split_data: bool = True,
+                                   local_scanpy_obj: AnnData = None,
+                                   attention_type: str = "additive",
+                                   inplace: bool = False,
+                                   rank_mode: str = "mean",
+                                   correct_predictions_only: bool = True,
+                                   use_raw_x: bool = True,
+                                   verbose: bool = True):
+        """ Class method with automated worflow of getting query genes.
+
+        Args:
+            model: The model we want to use to make predictions and extract
+              attention weights from.
+            how_many_global_genes : An integer indicating the number of top
+              genes desired
+            split_data: A boolean indicating whether the annotated data should
+              be splitted into train and test.
+            local_scanpy_obj: An AnnData object that would locally replace the
+              scanpy object that was set in the constructor for the object.
+            attention_type: The type of attention the inputted model was
+              trained with. This will be 'additive' in most cases (even when
+              NACT included projection blocks).
+            inplace: Wheather we want changes to be inplace, or on a copy (in
+              which case it will be returned.
+            correct_predictions_only: Whether to extract attention only from the
+              correct predictions or not.
+            use_raw_x: To use the "adata.raw.X" or just adata.X (depending on
+              preprocessing pipeline).
+            verbose: Whether the methods should print out their process or not.
+
+        Returns:
+
+
+        Raises:
+            None.
+        """
+        # As the first step, we want to extract attention values for each gene.
+        att_adata, _ = self.assign_attention(
+            model=model,
+            inplace=inplace,
+            local_scanpy_obj=local_scanpy_obj,
+            correct_predictions_only=correct_predictions_only,
+            attention_type=attention_type,
+            verbose=verbose,
+            use_raw_x=use_raw_x)
+
+        # Next, we extract the top attentive gene names across all cells
+        top_global_genes = self.get_top_n(n=how_many_global_genes,
+                                          rank_mode=rank_mode,
+                                          verbose=verbose).index.tolist()
+        # Now subsetting the dataset to only include the top genes
+        top_genes_subset_adata = att_adata[:, top_global_genes]
+
+        if split_data:
+            top_genes_subset_train = top_genes_subset_adata[
+                top_genes_subset_adata.obs.split == "train"]
+            top_genes_subset_test = top_genes_subset_adata[
+                top_genes_subset_adata.obs.split == "test"]
+            # Separating diffrent components for further analysis and validation
+            subset_train = sparse_to_dense(top_genes_subset_train)
+            subset_labels_train = top_genes_subset_train.obs.cluster.to_numpy()
+            subset_names_train = list(
+                top_genes_subset_train.obs.celltypes.to_numpy())
+
+            subset_test = sparse_to_dense(top_genes_subset_test)
+            subset_labels_test = top_genes_subset_test.obs.cluster.to_numpy()
+            subset_names_test = list(
+                top_genes_subset_test.obs.celltypes.to_numpy())
+
+            return (subset_train, subset_test, subset_labels_train,
+                    subset_labels_test, subset_names_train, subset_names_test)
+
+        else:
+            # Separating diffrent components for further analysis and validation
+            subset_all = sparse_to_dense(top_genes_subset_adata)
+            subset_labels_all = top_genes_subset_adata.obs.cluster.to_numpy()
+            subset_names_all = list(
+                top_genes_subset_adata.obs.celltypes.to_numpy())
+
+            return subset_all, subset_labels_all, subset_names_all
+
     def assign_attention(self,
                          model: NACTProjectionAttention |
                          NACTAdditiveModel = None,
@@ -319,6 +404,7 @@ class AttentionQuery():
                          inplace: bool = False,
                          correct_predictions_only: bool = True,
                          use_raw_x: bool = True,
+                         device: str = "infer",
                          verbose: bool = True):
         """ The method to assign attention score to a scanpy object.
 
@@ -354,9 +440,12 @@ class AttentionQuery():
         if model is None and self.model is None:
             raise ValueError("Please provide a model for making predictions and"
                              " extracting attention weights.")
-        else:
+        elif model is None and self.model is not None:
             model = self.model
 
+        if device == "infer":
+            device = torch.device(
+                "cuda" if torch.cuda.is_available() else "cpu")
         # set the flag
         self.attention_weights = True
 
@@ -383,8 +472,9 @@ class AttentionQuery():
             print("    -> Making predictions")
 
         with torch.no_grad():
-            logits, score, attentive_genes = model(test_tensor.float(),
-                                                   training=False)
+            model.to(device)
+            logits, score, attentive_genes = model(
+                test_tensor.float().to(device), training=False)
             _, predicted = torch.max(logits.squeeze(), 1)
 
         # If this call is for the entirety of the data we have, then we should
@@ -414,7 +504,8 @@ class AttentionQuery():
                     "str")
 
         if correct_predictions_only:
-            print("    -> **Returning only the correct predictions**")
+            if verbose:
+                print("    -> **Returning only the correct predictions**")
             test_data = test_data[test_data.obs["cluster"] ==
                                   test_data.obs["prediction"]]
             # We will use this adata later on instead if we only want to look
