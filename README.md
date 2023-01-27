@@ -35,7 +35,9 @@ Although the core requirements are listed directly in `setup.py`. Nonetheless, i
 All main scripts for training our deep learning model are located in [this separate repository](https://github.com/SindiLab/N-ACT-TrainingScripts).
 
 ## [Tutorials](https://github.com/SindiLab/Tutorials/tree/main/N-ACT)
-We have compiled a set of notebooks as tutorials to showcase N-ACT's capabilities and interptretability. These notebooks located [here](https://github.com/SindiLab/Tutorials/tree/main/N-ACT). Please feel free to open a new issues with any questions or request for new tutorials.
+We have compiled a set of notebooks as tutorials to showcase N-ACT's capabilities and interptretability. These notebooks located [here](https://github.com/SindiLab/Tutorials/tree/main/N-ACT). 
+
+**Please feel free to open issues for any questions or requests for additional tutorials!**
 
 ## Trained Models
 TODO: Will be released with the next preprint for N-ACT.
