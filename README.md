@@ -1,7 +1,10 @@
 # N-ACT (Package Repository)
 
-![N-ACT_Diagram](N-ACT_Diagram.png)
+
 This repository hosts the package for [N-ACT: An Interpretable Deep Learning Model for Automatic Cell Type and Salient Gene Identification](https://icml-compbio.github.io/2022/papers/WCBICML2022_paper_18.pdf) (WCB @ ICML2022 paper). To make package development and maintaining more efficient, we have located training scripts and tutorials in different repositories into different repositories, as listed below.
+
+![N-ACT_Diagram](N-ACT_Diagram.png)
+
 [![arXiv:10.48550/arXiv.2206.04047](http://img.shields.io/badge/arXiv-110.48550/arXiv.2206.04047-A42C25.svg)](https://doi.org/10.48550/arXiv.2206.04047)
 
 ## Installing N-ACT
